@@ -1,9 +1,46 @@
 import tkinter as tk
-from validate_email import validate_email
+import smtplib
+import dns.resolver
+
+def smtp_check(email):
+    try:
+        domain = email.split('@')[1]
+        records = dns.resolver.resolve(domain, 'MX')
+        mx_record = str(records[0].exchange)
+
+        server = smtplib.SMTP(timeout=10)
+        server.connect(mx_record)
+        server.helo(server.local_hostname)  # Send HELO command
+        server.mail('your_email@example.com')  # Use any valid sender email here
+        code, message = server.rcpt(email)
+        server.quit()
+
+        # 250 is success code for recipient OK
+        if code == 250:
+            return True
+        else:
+            return False
+    except Exception as e:
+        print(f"SMTP check error: {e}")
+        return False
 
 def check_email(event=None):
-    email = email_entry.get()
-    if validate_email(email, verify=True):
+    email = email_entry.get().strip()
+
+    if '@' not in email or '.' not in email.split('@')[-1]:
+        result_label.config(text="Invalid email syntax.", fg="red")
+        return
+
+    try:
+        # Check if domain has MX records
+        domain = email.split('@')[1]
+        dns.resolver.resolve(domain, 'MX')
+    except Exception:
+        result_label.config(text="Domain not found or no MX records.", fg="red")
+        return
+
+    # Run SMTP deliverability check
+    if smtp_check(email):
         result_label.config(text="The email address is deliverable.", fg="green")
     else:
         result_label.config(text="The email address is not deliverable.", fg="red")
@@ -22,7 +59,7 @@ def select_all_text():
 
 # Create the main window
 root = tk.Tk()
-root.title("Email Verifier v2.5")
+root.title("Email Verifier v3")
 
 # Create widgets
 email_label = tk.Label(root, text="Enter Email Address:")
@@ -31,7 +68,7 @@ email_label.grid(row=0, column=0, padx=10, pady=5)
 email_entry = tk.Entry(root, width=30)
 email_entry.grid(row=0, column=1, padx=10, pady=5)
 
-# Create a context menu for the email entry field
+# Context menu for the entry field
 context_menu = tk.Menu(root, tearoff=0)
 context_menu.add_command(label="Cut", command=cut_text)
 context_menu.add_command(label="Copy", command=copy_text)
@@ -50,8 +87,5 @@ check_button.grid(row=1, column=0, columnspan=2, pady=5)
 result_label = tk.Label(root, text="", fg="black")
 result_label.grid(row=2, column=0, columnspan=2, pady=5)
 
-# Bind the Enter key to the check_email function
 root.bind('<Return>', check_email)
-
-# Start the GUI main loop
 root.mainloop()
